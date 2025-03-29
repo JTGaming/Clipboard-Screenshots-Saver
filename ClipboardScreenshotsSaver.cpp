@@ -10,7 +10,7 @@
 #pragma comment (lib,"Gdiplus.lib")
 
 std::chrono::steady_clock::time_point saved_time{};
-std::wstring directory = L"D:\\Pictures\\Screenshots\\";
+std::wstring directory;
 int JPEG_QUALITY = 95;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
@@ -45,7 +45,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     {
         if (AddClipboardFormatListener(hwnd) == TRUE) //-V676
         {
-            MainLoop();
+            PWSTR picturesFolderPath = nullptr;
+            HRESULT result = SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &picturesFolderPath);
+
+            if (result == S_OK && picturesFolderPath != nullptr) {
+                directory = picturesFolderPath;
+                directory += L"\\Screenshots\\";
+                CoTaskMemFree(picturesFolderPath);
+
+                MainLoop();
+            }
+
 			RemoveClipboardFormatListener(hwnd);
         }
     }

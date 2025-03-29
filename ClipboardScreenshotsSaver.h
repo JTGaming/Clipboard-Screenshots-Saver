@@ -6,6 +6,7 @@
 #include <chrono>
 #include <assert.h>
 #include <Gdiplus.h>
+#include <shlobj.h>
 
 HINSTANCE g_hInst = NULL;
 UINT const WMAPP_NOTIFYCALLBACK = WM_APP + 1;
