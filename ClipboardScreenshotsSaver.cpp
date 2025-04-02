@@ -98,21 +98,33 @@ std::wstring get_formatted_filename(const wchar_t* ext)
 
 void check_clipboard()
 {
+	static DWORD SeqUD_old = 0;
+
     if (!OpenClipboard_ButTryABitHarder(NULL))
         // Could not open clipboard. This usually indicates that another application is permanently blocking it.
         return;
 
+    DWORD SeqUD = GetClipboardSequenceNumber();
     HGLOBAL ClipboardDataHandle = (HGLOBAL)GetClipboardData(CF_DIB);
-    if (!ClipboardDataHandle)
-    {
+
+	if (SeqUD == SeqUD_old || !ClipboardDataHandle)
+	{
         // Clipboard object is not a DIB, and is not auto-convertible to DIB
         CloseClipboard();
         return;
-    }
+	}
 
     BITMAPINFOHEADER* BitmapInfoHeader = (BITMAPINFOHEADER*)GlobalLock(ClipboardDataHandle);
     assert(BitmapInfoHeader); // This can theoretically fail if mapping the HGLOBAL into local address space fails. Very pathological, just act as if it wasn't a bitmap in the clipboard.
 
+	if (BitmapInfoHeader->biSizeImage == 0 || BitmapInfoHeader->biCompression != BI_BITFIELDS)
+	{
+		//clipboard was not a screenshot but a copied image
+		GlobalUnlock(ClipboardDataHandle);
+		CloseClipboard();
+		return;
+	}
+    
     SIZE_T ClipboardDataSize = GlobalSize(ClipboardDataHandle);
     assert(ClipboardDataSize >= sizeof(BITMAPINFOHEADER)); // Malformed data. While older DIB formats exist (e.g. BITMAPCOREHEADER), they are not valid data for CF_DIB; it mandates a BITMAPINFO struct. If this fails, just act as if it wasn't a bitmap in the clipboard.
 
@@ -135,19 +147,22 @@ void check_clipboard()
     BitmapFileHeader.bfSize = (DWORD)TotalBitmapFileSize; // Will fail if bitmap size is nonstandard >4GB
     BitmapFileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + PixelDataOffset;
 
-    //\3HANDLE FileHandle = CreateFileW((get_formatted_filename(L".bmp")).c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    //\3if (FileHandle != INVALID_HANDLE_VALUE)
-    //\3{
-    //\3    DWORD dummy = 0;
-    //\3    BOOL Success = true;
-    //\3    Success &= WriteFile(FileHandle, &BitmapFileHeader, sizeof(BITMAPFILEHEADER), &dummy, NULL);
-    //\3    Success &= WriteFile(FileHandle, BitmapInfoHeader, (DWORD)ClipboardDataSize, &dummy, NULL);
-    //\3    Success &= CloseHandle(FileHandle);
-    //\3}
+    //HANDLE FileHandle = CreateFileW((get_formatted_filename(L".bmp")).c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    //if (FileHandle != INVALID_HANDLE_VALUE)
+    //{
+    //    DWORD dummy = 0;
+    //    BOOL Success = true;
+    //    Success &= WriteFile(FileHandle, &BitmapFileHeader, sizeof(BITMAPFILEHEADER), &dummy, NULL);
+    //    Success &= WriteFile(FileHandle, BitmapInfoHeader, (DWORD)ClipboardDataSize, &dummy, NULL);
+    //    Success &= CloseHandle(FileHandle);
+    //}
 
     int ret = ConvertBitmapToJpeg(BitmapInfoHeader, BitmapFileHeader, get_formatted_filename(L".jpg").c_str());
-	if (ret == 0)
+    if (ret == 0)
+    {
         saved_time = std::chrono::high_resolution_clock::now();
+        SeqUD_old = SeqUD;
+    }
 
     GlobalUnlock(ClipboardDataHandle);
     CloseClipboard();
