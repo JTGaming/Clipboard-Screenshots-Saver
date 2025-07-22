@@ -105,9 +105,14 @@ void check_clipboard()
         return;
 
     DWORD SeqUD = GetClipboardSequenceNumber();
-    HGLOBAL ClipboardDataHandle = (HGLOBAL)GetClipboardData(CF_DIB);
+	if (SeqUD == SeqUD_old)
+	{
+        CloseClipboard();
+        return;
+	}
 
-	if (SeqUD == SeqUD_old || !ClipboardDataHandle)
+    HGLOBAL ClipboardDataHandle = (HGLOBAL)GetClipboardData(CF_DIB);
+	if (!ClipboardDataHandle)
 	{
         // Clipboard object is not a DIB, and is not auto-convertible to DIB
         CloseClipboard();
@@ -147,24 +152,56 @@ void check_clipboard()
     BitmapFileHeader.bfSize = (DWORD)TotalBitmapFileSize; // Will fail if bitmap size is nonstandard >4GB
     BitmapFileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + PixelDataOffset;
 
-    //HANDLE FileHandle = CreateFileW((get_formatted_filename(L".bmp")).c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    //if (FileHandle != INVALID_HANDLE_VALUE)
-    //{
-    //    DWORD dummy = 0;
-    //    BOOL Success = true;
-    //    Success &= WriteFile(FileHandle, &BitmapFileHeader, sizeof(BITMAPFILEHEADER), &dummy, NULL);
-    //    Success &= WriteFile(FileHandle, BitmapInfoHeader, (DWORD)ClipboardDataSize, &dummy, NULL);
-    //    Success &= CloseHandle(FileHandle);
-    //}
+    const auto filePath = get_formatted_filename(L".jpg");
+    int ret = ConvertBitmapToJpeg(BitmapInfoHeader, BitmapFileHeader, filePath.c_str());
+    GlobalUnlock(ClipboardDataHandle);
 
-    int ret = ConvertBitmapToJpeg(BitmapInfoHeader, BitmapFileHeader, get_formatted_filename(L".jpg").c_str());
     if (ret == 0)
     {
         saved_time = std::chrono::high_resolution_clock::now();
         SeqUD_old = SeqUD;
+
+		// Clear the clipboard as we overwrite it with the JPG file path
+        if (!EmptyClipboard()) {
+            CloseClipboard();
+            return;
+        }
+
+        // Prepare the file path as an HDROP structure
+        HGLOBAL hDropList =
+            GlobalAlloc(GMEM_MOVEABLE, sizeof(DROPFILES) + (filePath.length() + 2) * sizeof(wchar_t));
+        if (!hDropList) {
+            CloseClipboard();
+            return; // Failed to allocate memory
+        }
+
+        // Lock the global memory and set up the DROPFILES structure
+        DROPFILES* dropFiles = (DROPFILES*)GlobalLock(hDropList);
+        if (!dropFiles) {
+            GlobalFree(hDropList);
+            CloseClipboard();
+            return;
+        }
+
+        dropFiles->pFiles = sizeof(DROPFILES);
+        dropFiles->fNC = TRUE;
+        dropFiles->fWide = TRUE;
+
+        // Copy the file path into the memory after DROPFILES structure
+        wchar_t* fileName = (wchar_t*)((char*)dropFiles + sizeof(DROPFILES));
+        wcscpy_s(fileName, filePath.length() + 2, filePath.c_str());
+        fileName[filePath.length() + 1] = L'\0'; // second null terminator
+
+        GlobalUnlock(hDropList);
+
+        // Set the clipboard data for CF_HDROP
+        if (SetClipboardData(CF_HDROP, hDropList) == NULL) {
+            GlobalFree(hDropList); // Only free if SetClipboardData fails
+            CloseClipboard();
+            return;
+        }
     }
 
-    GlobalUnlock(ClipboardDataHandle);
     CloseClipboard();
 }
 
