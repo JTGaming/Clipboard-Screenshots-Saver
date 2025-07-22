@@ -13,6 +13,7 @@ UINT const WMAPP_NOTIFYCALLBACK = WM_APP + 1;
 wchar_t const szWindowClass[] = L"Screenshot Saver";
 // Use a guid to uniquely identify our icon
 class __declspec(uuid("09e54236-9a13-4b7f-b61d-096fc3400e10")) NotifIcon;
+HWND main_hwnd = NULL;
 
 enum EVENTMODE : UINT
 {

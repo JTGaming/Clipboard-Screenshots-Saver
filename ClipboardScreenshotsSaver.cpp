@@ -40,10 +40,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     // Create the main window. This could be a hidden window if you don't need
     // any UI other than the notification icon.
-    HWND hwnd = CreateWindow(szWindowClass, szWindowClass, 0, 0, 0, 0, 0, 0, 0, g_hInst, 0);
-    if (hwnd)
+    main_hwnd = CreateWindow(szWindowClass, szWindowClass, 0, 0, 0, 0, 0, 0, 0, g_hInst, 0);
+    if (main_hwnd)
     {
-        if (AddClipboardFormatListener(hwnd) == TRUE) //-V676
+        if (AddClipboardFormatListener(main_hwnd) == TRUE) //-V676
         {
             PWSTR picturesFolderPath = nullptr;
             HRESULT result = SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &picturesFolderPath);
@@ -56,7 +56,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
                 MainLoop();
             }
 
-			RemoveClipboardFormatListener(hwnd);
+			RemoveClipboardFormatListener(main_hwnd);
         }
     }
 
@@ -197,7 +197,9 @@ BOOL AddIcon(HWND hwnd)
     nid.guidItem = __uuidof(NotifIcon);
     nid.uCallbackMessage = WMAPP_NOTIFYCALLBACK;
     LoadIconMetric(g_hInst, MAKEINTRESOURCE(IDI_NOTIFICATIONICONIDX + (int)IDLE), LIM_SMALL, &nid.hIcon);
-    Shell_NotifyIcon(NIM_ADD, &nid);
+    BOOL ret = Shell_NotifyIcon(NIM_ADD, &nid);
+    if (ret != TRUE)
+        return FALSE;
 
     // NOTIFYICON_VERSION_4 is prefered
     nid.uVersion = NOTIFYICON_VERSION_4;
@@ -219,8 +221,13 @@ void UpdateIcon(EVENTMODE mode)
     if (hr != S_OK)
         return;
     BOOL ret = Shell_NotifyIcon(NIM_MODIFY, &nid);
-    if (ret != TRUE) //-V676
+    if (ret != TRUE)
+    {
+        DeleteIcon();
+        AddIcon(main_hwnd);
+        old_mode = PADDING;
         return;
+    }
 
     old_mode = mode;
 
