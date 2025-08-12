@@ -105,7 +105,10 @@ void check_clipboard()
         return;
 
     DWORD SeqUD = GetClipboardSequenceNumber();
-	if (SeqUD == SeqUD_old)
+    auto curr_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<float, std::milli> delta_time_ms = curr_time - saved_time;
+
+	if (SeqUD == SeqUD_old || delta_time_ms.count() < 50.f && (SeqUD - SeqUD_old) < 10 || delta_time_ms.count() < 2.f)
 	{
         CloseClipboard();
         return;
@@ -154,18 +157,11 @@ void check_clipboard()
 
     const auto filePath = get_formatted_filename(L".jpg");
     int ret = ConvertBitmapToJpeg(BitmapInfoHeader, BitmapFileHeader, filePath.c_str());
-    GlobalUnlock(ClipboardDataHandle);
 
     if (ret == 0)
     {
         saved_time = std::chrono::high_resolution_clock::now();
         SeqUD_old = SeqUD;
-
-		// Clear the clipboard as we overwrite it with the JPG file path
-        if (!EmptyClipboard()) {
-            CloseClipboard();
-            return;
-        }
 
         // Prepare the file path as an HDROP structure
         HGLOBAL hDropList =
@@ -202,6 +198,7 @@ void check_clipboard()
         }
     }
 
+    GlobalUnlock(ClipboardDataHandle);
     CloseClipboard();
 }
 
